@@ -1,0 +1,170 @@
+---
+title: "R Notebook"
+author: "Keith Matthews"
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+# Project using data from "iris"
+
+## Install Packages
+```{r}
+install.packages("caret")
+install.packages("caret", dependencies=c("Depends", "Suggests"))
+library(caret)
+```
+## Loading the data
+### Attaching the iris dataset to the environment
+```{r}
+data("iris")
+### rename the dataset 
+dataset <- iris
+```
+
+## Create a validation dataset
+### create a list of 80% of the dataset which can be used for training
+```{r}
+validation_index <- createDataPartition(dataset$Species, p=0.80, list = FALSE)
+```
+### Select 20% for data validation 
+```{r}
+validation <- dataset[-validation_index,]
+```
+### use the remaining 80% of the data for training and testing of models
+```{r}
+dataset <- dataset [validation_index,]
+```
+
+## Summarize the dataset
+
+### Dimensions of the dataset
+```{r}
+dim(dataset)
+```
+### List types for each attribute
+```{r}
+sapply(dataset, class)
+```
+### Taking a peek at the data
+```{r}
+head(dataset)
+```
+### List the levels for the class
+```{r}
+levels(dataset$Species)
+```
+### Class distribution
+##### Taking a look at the number of instances (rows) that belong to each class
+```{r}
+percentage <- prop.table(table(dataset$Species)) * 100
+cbind(freq=table(dataset$Species), percentage = percentage)
+```
+### Each class has the same number of instances (40 or 33.33% of the dataset)
+
+## Summarize the attribute distributions 
+```{r}
+summary(dataset)
+```
+### All of the numerical values have the same scale (centimeters) and similar ranges [0,8] centimeters
+
+## Visualize the Dataset
+### Start with some univariate plots, plots for each individual variable
+```{r}
+### split the input and output
+x <- dataset[,1:4]
+y <- dataset[,5]
+
+### Boxplot for each attribute in one image
+par(mfrow=c(1,4))
+    for (i in 1:4) {
+      boxplot(x[i], main=names(iris)[i])
+      
+    }
+```
+### A barplot would be unintresting as we know that the class distribution is even and all the instances are evenly distributed across the three classes
+```{r}
+plot(y)
+```
+## Multivariate plots
+### Looking at interactions between the variables 
+#### Scatterplots of all pairs of attributes and color the points by class. 
+#### Since scatterplots show that points for each class are generally separate, we can draw ellipses around them 
+```{r}
+featurePlot(x=x,y=y,plot = "ellipse")
+```
+### Box and whisker plot for each attribute
+#### this is useful to see that there are clearly different distributions of the attributes for each class value
+```{r}
+featurePlot(x=x,y=y,plot = "box")
+```
+### Density plot for each attribute by class value
+```{r}
+scales <- list(x= list(relation = "free"), y = list(relation = "free"))
+featurePlot(x=x,y=y,plot = "density", scales = scales)
+```
+
+## Evlauate some algorithms
+
+### 1. Test Harness
+##### 10- fold cross validation to estimate accuracy
+
+```{r}
+control <- trainControl(method = "cv", number = 10)
+metric <- "Accuracy"
+```
+
+#### We are using the metric of "Accuracy" to evaluate models. This is a ratio of the number of correctly predicted instances in divided by the total number of instances in the dataset multipled by 100  to give it a percentage
+
+### 2. Build Models
+#### Lets evaluate 5 different algorithms 
+##### 1. Linear Discriminat Analysis (LDA) 2. Classification and Regression Trees (CART) 3. k-Nearest Neighbors(kNN) 4. Support Vector Machines (SVM) with a linear kernal 5. Random Forest(RF)
+
+###### Reset the random number seed before each run to ensure that the evaluation of each algorithm is performed using exactly the samae data splits. It ensures that the results are directly comparable
+
+```{r}
+## a) linear algorithms
+set.seed(7)
+fit.lda <- train(Species~., data = dataset, method= "lda", metric = metric, trControl=control)
+## b) nonlinear algorithms
+## CART
+set.seed(7)
+fit.cart <- train(Species~., data=dataset, method="rpart", metric=metric, trControl = control)
+## kNN
+set.seed(7)
+fit.knn <- train(Species~., data=dataset, method ="knn", metric=metric, trControl=control)
+## c) advance algorithms
+## SVM 
+set.seed(7)
+fit.svm <- train(Species~., data=dataset, method ="svmRadial", metric = metric, trControl = control )
+## Random Forest
+set.seed(7)
+fit.rf <- train(Species~., data=dataset, method = "rf", metric = metric, trControl = control)
+```
+
+## Select the best model 
+### summarize accuracy of the models
+```{r}
+results <- resamples(list(lda=fit.lda, cart=fit.cart, knn=fit.knn, svm=fit.svm, rf= fit.rf))
+summary(results)
+```
+### Create a plot of the model evaluation reults and compare the spread and the mean accuracy of each model.
+
+```{r}
+## Compare accuracy of models
+dotplot(results)
+```
+```{r}
+## summarize Best Model
+print(fit.lda)
+```
+## Make Predictions
+#### LDA was the most accurate model. Now we would want to get an idea of the accuracy of the model in our validation set 
+```{r}
+# estimate skill of LDA on the validation dataset
+predictions <- predict(fit.lda, validation)
+confusionMatrix(predictions, validation$Species)
+```
+
